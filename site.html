@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Events</title>
+<style>
+  :root{
+    --bg:#0a0606;
+    --glass:rgba(22,11,13,0.55);
+    --glass-border:rgba(255,255,255,0.08);
+    --text:#f4eeed;
+    --text-dim:#b9aeac;
+    --grey-glass:rgba(40,40,42,0.5);
+    --grey-text:#8a8482;
+    --accent:#ff3b54;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{
+    width:100%;height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,sans-serif;
+    overflow-x:hidden;
+  }
+  #app{min-height:100vh;display:flex;flex-direction:column;}
+
+  .topnav{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:22px 32px;
+    position:relative;z-index:5;
+  }
+  .brand{
+    font-weight:800;font-size:18px;letter-spacing:0.3px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent);}
+  .nav-link{
+    color:var(--text-dim);text-decoration:none;font-size:13px;font-weight:600;
+    padding:9px 16px;border-radius:100px;border:1px solid var(--glass-border);
+    background:var(--glass);backdrop-filter:blur(10px);
+    transition:all .2s ease;
+  }
+  .nav-link:hover{color:var(--text);border-color:rgba(255,255,255,0.18);}
+
+  .stage{
+    flex:1;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    position:relative;
+    padding:20px 20px 40px;
+    min-height:640px;
+  }
+  .glow-bg{
+    position:absolute;inset:0;
+    pointer-events:none;
+    transition:background 1.1s ease;
+    z-index:0;
+  }
+  .card-wrap{
+    position:relative;z-index:2;
+    width:380px;
+    max-width:88vw;
+  }
+  .event-card{
+    position:relative;
+    border-radius:28px;
+    overflow:hidden;
+    border:1px solid var(--glass-border);
+    background:#0d0809;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    display:flex;flex-direction:column;
+    height:560px;
+  }
+  .event-card.upcoming{filter:saturate(0.25) brightness(0.85);}
+  .card-image-area{
+    position:relative;
+    height:300px;
+    overflow:hidden;
+    display:flex;align-items:flex-end;
+    background:#160c0d;
+  }
+  .card-image-area img{
+    position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  }
+  .card-image-area::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg, rgba(10,6,6,0) 40%, rgba(10,6,6,0.95) 100%);
+  }
+  .status-pill{
+    position:absolute;top:16px;right:16px;z-index:3;
+    font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;
+    padding:6px 12px;border-radius:100px;
+    background:rgba(0,0,0,0.45);
+    backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,0.12);
+  }
+  .status-pill.past{color:#ff7d8c;border-color:rgba(255,59,84,0.35);}
+  .status-pill.upcoming{color:var(--grey-text);}
+
+  .card-glass{
+    flex:1;
+    background:var(--glass);
+    backdrop-filter:blur(18px);
+    border-top:1px solid var(--glass-border);
+    padding:22px 24px 26px;
+    display:flex;flex-direction:column;
+    gap:10px;
+  }
+  .event-card.upcoming .card-glass{background:var(--grey-glass);}
+  .event-date{
+    font-size:12px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;
+    color:var(--accent);
+  }
+  .event-card.upcoming .event-date{color:var(--grey-text);}
+  .event-title{
+    font-size:21px;font-weight:800;line-height:1.25;letter-spacing:-0.2px;
+  }
+  .event-desc{
+    font-size:13.5px;line-height:1.55;color:var(--text-dim);
+    overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
+  }
+
+  .dots{display:flex;gap:7px;margin-top:26px;z-index:2;flex-wrap:wrap;justify-content:center;max-width:80vw;}
+  .dot-btn{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.18);border:none;cursor:pointer;transition:all .25s;padding:0;}
+  .dot-btn.active{width:22px;border-radius:4px;background:var(--accent);}
+
+  .empty-state{
+    text-align:center;color:var(--text-dim);font-size:14px;z-index:2;
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+  }
+  .empty-state b{color:var(--text);font-size:17px;}
+
+  @media (max-width:480px){
+    .topnav{padding:18px 18px;}
+    .event-card{height:520px;}
+    .card-image-area{height:260px;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  let state = {
+    events: [],
+    activeIndex: 0,
+    timerHandle: null,
+    paused: false
+  };
+
+  const app = document.getElementById("app");
+
+  function uid(){ return 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
+
+  async function loadEvents(){
+    try{
+      const res = await window.storage.get('events-list', true);
+      state.events = (res && res.value) ? JSON.parse(res.value) : [];
+    }catch(e){
+      state.events = [];
+    }
+  }
+
+  function parseDate(d){
+    return new Date(d + "T00:00:00");
+  }
+  function isUpcoming(dateStr){
+    const today = new Date(); today.setHours(0,0,0,0);
+    return parseDate(dateStr) > today;
+  }
+  function formatDate(dateStr){
+    return parseDate(dateStr).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  }
+  function sortedEvents(){
+    return [...state.events].sort((a,b)=> parseDate(a.date) - parseDate(b.date));
+  }
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s || "";
+    return d.innerHTML;
+  }
+
+  function glowFor(ev, idx){
+    if(isUpcoming(ev.date)){
+      return `radial-gradient(ellipse 700px 500px at ${30+ (idx%3)*20}% 70%, rgba(90,90,95,0.22), transparent 60%)`;
+    }
+    const today = new Date(); today.setHours(0,0,0,0);
+    const daysAgo = Math.max(0, Math.round((today - parseDate(ev.date)) / 86400000));
+    const recency = Math.max(0.25, 1 - Math.min(daysAgo, 365)/365);
+    const pos = 30 + (idx % 4) * 15;
+    return `radial-gradient(ellipse 800px 600px at ${pos}% 65%, rgba(226,30,60,${0.35*recency+0.1}), rgba(140,18,40,${0.15*recency}) 45%, transparent 70%)`;
+  }
+
+  function renderCarousel(){
+    const events = sortedEvents();
+    const glowBg = events.length ? glowFor(events[state.activeIndex], state.activeIndex) : "radial-gradient(ellipse 800px 600px at 50% 60%, rgba(140,18,40,0.18), transparent 70%)";
+
+    let cardHtml = "";
+    if(events.length === 0){
+      cardHtml = `
+        <div class="empty-state">
+          <b>No events yet</b>
+          <span>Check back soon.</span>
+        </div>`;
+    } else {
+      const ev = events[state.activeIndex];
+      const upcoming = isUpcoming(ev.date);
+      const img = ev.image || "";
+      cardHtml = `
+        <div class="card-wrap">
+          <div class="event-card ${upcoming ? 'upcoming':''}">
+            <div class="card-image-area">
+              ${img ? `<img src="${img}" alt="" onerror="this.style.opacity=0">` : ``}
+              <span class="status-pill ${upcoming?'upcoming':'past'}">${upcoming ? 'Upcoming' : 'Past event'}</span>
+            </div>
+            <div class="card-glass">
+              <div class="event-date">${escapeHtml(formatDate(ev.date))}</div>
+              <div class="event-title">${escapeHtml(ev.title)}</div>
+              <div class="event-desc">${escapeHtml(ev.description)}</div>
+            </div>
+          </div>
+        </div>
+        <div class="dots">
+          ${events.map((_,i)=>`<button class="dot-btn ${i===state.activeIndex?'active':''}" data-idx="${i}" aria-label="Go to event ${i+1}"></button>`).join('')}
+        </div>
+      `;
+    }
+
+    app.innerHTML = `
+      <div class="glow-bg" style="background:${glowBg}"></div>
+      <div class="topnav">
+        <div class="brand"><span class="dot"></span> Events</div>
+      </div>
+      <div class="stage" id="stage">
+        ${cardHtml}
+      </div>
+    `;
+
+    document.querySelectorAll(".dot-btn").forEach(btn=>{
+      btn.onclick = ()=>{
+        state.activeIndex = parseInt(btn.dataset.idx,10);
+        renderCarousel();
+        resetTimer();
+      };
+    });
+
+    const stage = document.getElementById("stage");
+    if(stage){
+      stage.onmouseenter = ()=>{ state.paused = true; };
+      stage.onmouseleave = ()=>{ state.paused = false; };
+    }
+
+    startTimer();
+  }
+
+  function startTimer(){
+    if(state.timerHandle) return;
+    state.timerHandle = setInterval(()=>{
+      if(state.paused) return;
+      const events = sortedEvents();
+      if(events.length < 2) return;
+      state.activeIndex = (state.activeIndex + 1) % events.length;
+      renderCarousel();
+    }, 4500);
+  }
+  function stopTimer(){
+    if(state.timerHandle){ clearInterval(state.timerHandle); state.timerHandle = null; }
+  }
+  function resetTimer(){ stopTimer(); startTimer(); }
+
+  // refresh data periodically so new admin posts show up without a manual reload
+  async function refreshLoop(){
+    setInterval(async ()=>{
+      const prevLen = state.events.length;
+      await loadEvents();
+      if(state.events.length !== prevLen){
+        if(state.activeIndex >= state.events.length) state.activeIndex = 0;
+        renderCarousel();
+      }
+    }, 15000);
+  }
+
+  async function init(){
+    app.innerHTML = `<div class="stage"><div class="empty-state">Loading…</div></div>`;
+    await loadEvents();
+    renderCarousel();
+    refreshLoop();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
